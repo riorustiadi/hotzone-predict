@@ -3,7 +3,7 @@ FROM python:3.13-slim
 WORKDIR /app
 
 # Install system dependencies for LightGBM
-RUN apt-get install -y libgomp1 && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y libgomp1 && rm -rf /var/lib/apt/lists/*
 
 # Install dependencies
 COPY requirements.txt .
