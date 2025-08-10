@@ -1,0 +1,12 @@
+version: '3.8'
+
+services:
+  hotzone-tuner:
+    build: .
+    container_name: hotzone-tuner
+    volumes:
+      - ./data:/app/data:ro  # Mount data folder as read-only
+      - /home/riorustiadi/docker/volumes/hotzone-predict/vault:/app/vault  # Mount vault to host
+    environment:
+      - PYTHONUNBUFFERED=1
+    restart: "no"

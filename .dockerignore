@@ -1,0 +1,6 @@
+vault/
+envtuner/
+__pycache__/
+*.pyc
+.git/
+.vscode/

@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.env
+.env
+envtuner/
+*.egg-info/
+dist/
+build/
+
+# VS Code
+.vscode/
+
+# Data & Model Artifacts
+data/
+vault/
+vault/tuner.log
+vault/zone_encoder.joblib
+vault/hotzone_tune.db
+
+# Parquet files
+*.parquet
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# OS files
+.DS_Store
+Thumbs.db
