@@ -133,7 +133,7 @@ study = optuna.create_study(
     storage=storage,
     load_if_exists=True)
 
-study.optimize(objective_lightgbm, n_trials=1)
+study.optimize(objective_lightgbm, n_trials=20)
 best_params_lgb = study.best_params
 
 logger.info(f"Best parameters found: {best_params_lgb}")
