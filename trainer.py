@@ -4,7 +4,6 @@ from sklearn.preprocessing import LabelEncoder
 import joblib
 import numpy as np
 import lightgbm as lgb
-from sklearn.metrics import mean_squared_error
 import optuna
 import gc
 import logging
@@ -19,11 +18,10 @@ logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler(os.path.join(VAULT_DIR, 'tuner.log')), 
+        logging.FileHandler(os.path.join(VAULT_DIR, 'trainer.log')), 
         logging.StreamHandler()])
 
 logger = logging.getLogger(__name__)
-
 
 def load_hourly_data(folder):
     dfs = []
@@ -95,47 +93,45 @@ X_val, y_val = val_df[feature_cols], val_df['frequency_log']
 del train_df, val_df
 gc.collect()
 
-logger.info("Data preparation completed. Starting hyperparameter tuning...")
+logger.info("Data preparation completed. Starting model training...")
 
-storage = f"sqlite:///{os.path.join(VAULT_DIR, 'hotzone_tune.db')}"
 datetime_str = dt.datetime.now().strftime("%d%m%Y_%H%M%S")
-study_name = f"hotzone_tuning_{datetime_str}"
+model_name = f"hotzone_model_{datetime_str}"
 
-def objective_lightgbm(trial):
-    params = {
-        'objective': 'regression',
-        'metric': 'rmse',
-        'boosting_type': 'gbdt',
-        'verbose': -1,
-        'num_leaves': trial.suggest_int('num_leaves', 20, 35),
-        'learning_rate': trial.suggest_float('learning_rate', 0.06, 0.12, log=True),
-        'feature_fraction': trial.suggest_float('feature_fraction', 0.95, 1.0),
-        'bagging_fraction': trial.suggest_float('bagging_fraction', 0.6, 0.75),
-        'bagging_freq': trial.suggest_int('bagging_freq', 5, 7),
-        'min_data_in_leaf': trial.suggest_int('min_data_in_leaf', 45, 70),
-        'lambda_l1': trial.suggest_float('lambda_l1', 6.0, 10.0),
-        'lambda_l2': trial.suggest_float('lambda_l2', 0.5, 2.0),
-        'max_depth': trial.suggest_int('max_depth', 10, 12),
-        'min_gain_to_split': trial.suggest_float('min_gain_to_split', 8.0, 13.0),
-    }
-
-    train_data = lgb.Dataset(X_train, label=y_train)
-    val_data = lgb.Dataset(X_val, label=y_val, reference=train_data)
-    pruning_callback = optuna.integration.LightGBMPruningCallback(trial, "rmse")
-    model = lgb.train(params, train_data, valid_sets=[val_data], num_boost_round=1000,
-                        callbacks=[lgb.early_stopping(50), lgb.log_evaluation(0), pruning_callback])
-    y_pred = model.predict(X_val)
-    return np.sqrt(mean_squared_error(y_val, y_pred))
-
-study = optuna.create_study(
-    direction='minimize',
-    study_name=study_name,
-    storage=storage,
-    load_if_exists=True)
-
-study.optimize(objective_lightgbm, n_trials=20)
+study = optuna.load_study(
+    study_name="hotzone_tuning_10082025_203405",
+    storage="sqlite:///vault/hotzone_tune.db"
+)
 best_params_lgb = study.best_params
 
-logger.info(f"Best parameters found: {best_params_lgb}")
-logger.info(f"Best trial value: {study.best_value}")
-logger.info("Hyperparameter tuning completed.")
+params = best_params_lgb.copy()
+params.update({
+    'objective': 'regression', 
+    'metric': 'rmse', 
+    'boosting_type': 'gbdt', 
+    'verbose': -1,
+    'random_state': 42,
+    'force_row_wise': True
+})
+
+train_data = lgb.Dataset(X_train, label=y_train)
+val_data = lgb.Dataset(X_val, label=y_val, reference=train_data)
+
+model_lgb = lgb.train(
+    params, 
+    train_data, 
+    valid_sets=[val_data], 
+    num_boost_round=3000,
+    callbacks=[lgb.early_stopping(150), lgb.log_evaluation(100)])
+
+model_path = os.path.join(VAULT_DIR, f"{model_name}.joblib")
+joblib.dump(model_lgb, model_path)
+logger.info(f"Model saved as {model_path}")
+
+json_model_path = os.path.join(VAULT_DIR, f"{model_name}.json")
+model_lgb.save_model(json_model_path, format='json')
+logger.info(f"Model also saved as JSON: {json_model_path}")
+
+logger.info(f"Best iteration: {model_lgb.best_iteration}")
+logger.info(f"Best score: {model_lgb.best_score['valid_0']['rmse']}")
+logger.info("Training completed successfully.")
