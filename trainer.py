@@ -45,11 +45,33 @@ if train_df.empty or val_df.empty:
 
 logger.info("Performing feature engineering")
 
-zone_encoder = LabelEncoder()
-zone_encoder.fit(train_df['zone'])
-train_df['zone_encoded'] = zone_encoder.transform(train_df['zone'])
-val_df['zone_encoded'] = zone_encoder.transform(val_df['zone'])
-joblib.dump(zone_encoder, os.path.join(VAULT_DIR, 'zone_encoder.joblib'))
+zone_encoder_path = os.path.join(VAULT_DIR, 'complete_zone_encoder.joblib')
+if os.path.exists(zone_encoder_path):
+    zone_encoder = joblib.load(zone_encoder_path)
+    logger.info(f"Loaded zone encoder from {zone_encoder_path}")
+else:
+    zone_encoder = LabelEncoder()
+    zone_encoder.fit(train_df['zone'])
+    joblib.dump(zone_encoder, zone_encoder_path)
+    logger.info(f"Created and saved new zone encoder to {zone_encoder_path}")
+
+logger.info("Try encoding zones in training data...")
+try:
+    train_df['zone_encoded'] = zone_encoder.transform(train_df['zone'])
+except Exception as e:
+    logger.error(f"Zone encoding failed: {e}")
+    logger.error("Zone encoded data is different from training data !")
+    raise
+logger.info("Zone encoding completed successfully for training data.")
+
+logger.info("Try encoding zones in validation data...")
+try:
+    val_df['zone_encoded'] = zone_encoder.transform(val_df['zone'])
+except Exception as e:
+    logger.error(f"Zone encoding failed: {e}")
+    logger.error("Zone encoded data is different from validation data !")
+    raise
+logger.info("Zone encoding completed successfully for validation data.")
 
 logger.info("Encoding datetime with cyclical encoders...")
 for df in [train_df, val_df]:
@@ -129,7 +151,7 @@ joblib.dump(model_lgb, model_path)
 logger.info(f"Model saved as {model_path}")
 
 json_model_path = os.path.join(VAULT_DIR, f"{model_name}.json")
-model_lgb.save_model(json_model_path, format='json')
+model_lgb.save_model(json_model_path, num_iteration=model_lgb.best_iteration, dump_model=True)
 logger.info(f"Model also saved as JSON: {json_model_path}")
 
 logger.info(f"Best iteration: {model_lgb.best_iteration}")
